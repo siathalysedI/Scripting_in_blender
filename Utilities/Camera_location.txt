@@ -1,0 +1,9 @@
+LocX:54.442
+LocY:-45.576
+LocZ:21.061
+RotX:63.559
+RotY:0.620
+rotZ:46.692
+ScaleX:1.000
+ScaleY:1.000
+ScaleZ:1.000

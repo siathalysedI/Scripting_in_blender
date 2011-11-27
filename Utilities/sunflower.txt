@@ -1,0 +1,182 @@
+#!BPY
+
+# sunflower
+#
+# shows parenting and vertexparenting
+
+__author__    = "Michel Anders (varkenvarken)"
+__version__   = "1.0 2009/07/28"
+__copyright__ = "copyright 2009,2010 Michel J. Anders."
+__url__       = ["author's site, http://www.swineworld.org"]
+
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import Tools
+reload(Tools)
+
+import Blender
+from math import sqrt,pi,sin,cos
+
+def kernel(radius=1.0,scale=(1.0,1.0,1.0)):
+  """
+  create a sunflower kernel (seed) of a given radius aligned along the z-axis
+  
+  returns a tuple verts,faces each a list of tuples, 
+  vertex position (x,y,z) and vertex indices (v1,v2,v3,...) respectively
+  """
+  verts=[]
+  faces=[]
+  
+  circle=[(1,0),(0.707,0.707),(0,1),(-0.707,0.707),(-1,0),(-0.707,-0.707),(0,-1),(0.707,-0.707)]
+  
+  verts.extend([(radius*x,radius*y,0) for x,y in circle])
+  verts.extend([(radius*x,radius*y,radius) for x,y in circle])
+  verts.extend([(0.9*radius*x,0.9*radius*y,1.8*radius) for x,y in circle])
+  verts.extend([(0.4*radius*x,0.4*radius*y,2.5*radius) for x,y in circle])
+  verts.append((0,0,3.0*radius))  # the vertex at the tip of the kernel
+  
+  faces.extend([(0, 1, 9, 8), (1, 2, 10, 9), (2, 3, 11, 10), (3, 4, 12, 11), (4, 5, 13, 12), (5, 6, 14, 13), (6, 7, 15, 14), (7, 0, 8, 15)])
+  faces.extend([ (a+8,b+8,c+8,d+8) for a,b,c,d in faces[:8]])
+  faces.extend([ (a+16,b+16,c+16,d+16) for a,b,c,d in faces[:8]])
+  faces.extend([(i+24,(i+1)%8+24,32) for i in range(8)])
+  
+  verts=[(x*scale[0],y*scale[1],z*scale[2]) for x,y,z in verts]
+  
+  return verts,faces
+
+def petal(scale=(1.0,1.0,1.0)):
+  """
+  create a sunflower petal aligned along the x-axis
+
+  returns a tuple verts,faces each a list of tuples, 
+  vertex position (x,y,z) and vertex indices (v1,v2,v3,...) respectively
+  """
+  
+  verts=[(0,-1,0),(1,-1,0),(2,-0.7,0),(3,-0.5,-0.25),(3,0.5,-0.25),(2,0.7,0),(1,1,0),(0,1,0)]
+  faces=[(0,1,6,7),(1,2,5,6),(2,3,4,5)]
+  
+  verts=[(x*scale[0],y*scale[1],z*scale[2]) for x,y,z in verts]
+  
+  return verts,faces
+
+def stalk():
+  """
+  create a sunflower stalk aligned along the z-axis, pointing down.
+
+  returns a tuple verts,faces each a list of tuples, 
+  vertex position (x,y,z) and vertex indices (v1,v2,v3,...) respectively
+  """
+  
+  verts=[]
+  faces=[]
+  
+  circle=[(1,0),(0.707,0.707),(0,1),(-0.707,0.707),(-1,0),(-0.707,-0.707),(0,-1),(0.707,-0.707)]
+  
+  n=5
+  for h in range(0,-n,-1):
+    verts.extend([(x,y,h*8) for x,y in circle])
+    if h<0:
+      nv = len(circle)
+      base = -nv*h
+      faces.extend([(base+i,base+(i+1)%nv,base-nv+(i+1)%nv,base-nv+i) for i in range(nv)])
+  
+  return verts,faces
+
+def kernelpositions(nkernels=100,scale=1.05,a=1.0):
+  """
+  return a list of sunflower kernel x,y,radius positions.
+
+  http://www.scipress.org/journals/forma/pdf/2203/22030207.pdf
+    
+  """
+  if nkernels<3 : nkernels=3
+  kernelradius = 0.5
+  goldenratio = (1.0 + sqrt(5.0))/2.0
+  phi = 2*pi*(1.0-1.0/goldenratio)
+  
+  pos=[]
+  for n in range(nkernels):
+    theta = n * phi
+    r = sqrt(n/a)
+    x = r*cos(theta)
+    y = r*sin(theta)
+    pos.append((x,y,1.0/(1.0+kernelradius)))
+    kernelradius /= scale
+  
+  return pos
+
+def pos2verts(pos):
+  """
+  convert a list of position tuples (x,y,radius) to vertex positions
+  for each position three vertices are generated
+  """
+  verts=[]
+  dp =[(cos(phi),sin(phi)) for phi in (0,2*pi/3,4*pi/3)]
+  for x,y,r in pos:
+    verts.extend([ (x+r*dx,y+r*dy,0) for dx,dy in dp])
+  
+  return verts
+
+def sunflower(scene,nseeds=100,npetals=50):
+  pos = kernelpositions(nseeds)
+  headverts=pos2verts(pos)
+  faces=[(v,v+1,v+2) for v in range(0,len(headverts),3)]
+  
+  head=Tools.addmeshobject(scene,headverts,faces,name='head')
+  
+  kernelverts,kernelfaces=kernel(radius=1.5,scale=(1.0,1.0,0.3))
+  #print len(kernelverts),kernelfaces
+  
+  kernelmesh = Tools.newmesh(kernelverts,kernelfaces,name='kernel')
+  kernels = [Tools.addmeshduplicate(scene,kernelmesh,name='kernel') for i in range(nseeds)]
+  
+  for i in range(nseeds):
+    #print(kernels[i],head.data.verts[i*3:(i+1)*3])
+    loc = Tools.center(head.data.verts[i*3:(i+1)*3])
+    kernels[i].setLocation(loc)
+    head.makeParentVertex([kernels[i]],tuple([v.index for v in head.data.verts[i*3:(i+1)*3]]))
+    
+  # add petals (parent to head)
+  petalverts,petalfaces=petal((2.0,1.0,1.0))
+  petalmesh = Tools.newmesh(petalverts,petalfaces,name='petal')
+  
+  r = sqrt(nseeds)
+  petals = [Tools.addmeshduplicate(scene,petalmesh,name='petal') for i in range(npetals)]
+  for i,p in enumerate(petals):
+    a=float(i)*2*pi/npetals
+    p.setLocation(r*cos(a),r*sin(a),0)
+    e=p.getEuler('localspace')
+    e.z=a
+    p.setEuler(e)
+  head.makeParent(petals)
+  
+  # add stalk (parent head to stalk)
+  stalkverts,stalkfaces=stalk()
+  stalkob = Tools.addmeshobject(scene,stalkverts,stalkfaces,name='stalk')
+  stalkob.makeParent([head])
+  
+  # create a group of kernels and a group of petals for easy scaling
+  kernelgroup = Blender.Group.New('kernels')
+  kernelgroup.objects=kernels
+  
+  petalgroup = Blender.Group.New('petals')
+  petalgroup.objects=petals
+  
+  # create a group consisting of all objects
+  # unfortunately you cannot make a group of groups
+  all = Blender.Group.New('sunflower')
+  all.objects=sum([kernels,petals],[head,stalkob]) # trick to flatten lists
+  
+scene = Blender.Scene.GetCurrent()
+sunflower(scene,30,20)
